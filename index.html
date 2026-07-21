@@ -472,10 +472,14 @@
                 前往 GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)<br>
                 创建一个仅勾选 <strong>gist</strong> 权限的 Token。Token 存于本地，不会上传到你的仓库。
             </p>
-            <label for="gistIdInput">Gist ID（留空则自动创建）</label>
-            <input type="text" id="gistIdInput" placeholder="可选，已有 Gist 则填入 ID">
+            <label for="gistIdInput">Gist ID</label>
+            <input type="text" id="gistIdInput" placeholder="首台设备留空，自动创建；其他设备填入同一个 ID">
             <p class="hint" id="gistHint" style="display:none;">
-                ⬆️ 记住这个 ID，在其他设备/浏览器填入同一个 ID 即可同步。
+                ⬆️ 这是你的同步 ID。在其他设备上填入这个 ID 即可共享数据。
+            </p>
+            <p class="hint">
+                首次使用只需填 Token，系统会自动创建或查找已有数据。<br>
+                第二台设备请填入第一台显示的 Gist ID，确保同步到同一份数据。
             </p>
             <div class="modal-actions">
                 <button class="btn" onclick="closeSettings()">取消</button>
@@ -627,30 +631,8 @@
         }
 
         async function createGist() {
-            setSyncUI('syncing', '查找已有 Gist…');
+            setSyncUI('syncing', '创建同步空间…');
             try {
-                // 先查找是否已有同名文件的 Gist
-                const listRes = await fetch(`https://api.github.com/gists?per_page=100&t=${Date.now()}`, {
-                    headers: { 'Authorization': `token ${syncConfig.token}` }
-                });
-                if (!listRes.ok) throw new Error(`HTTP ${listRes.status}`);
-                const gists = await listRes.json();
-                const existing = gists.find(g => g.files && g.files[GIST_FILENAME]);
-
-                if (existing) {
-                    // 找到已有的，直接复用
-                    syncConfig.gistId = existing.id;
-                    saveSyncConfig();
-                    document.getElementById('gistIdInput').value = existing.id;
-                    document.getElementById('gistHint').style.display = 'block';
-                    // 拉取云端数据
-                    await pullFromGist();
-                    showToast('已找到云端数据并同步');
-                    return;
-                }
-
-                // 没有找到，新建一个
-                setSyncUI('syncing', '创建 Gist…');
                 const res = await fetch('https://api.github.com/gists', {
                     method: 'POST',
                     headers: {
@@ -674,7 +656,9 @@
                 document.getElementById('gistIdInput').value = gist.id;
                 document.getElementById('gistHint').style.display = 'block';
                 setSyncUI('connected', '已同步');
-                showToast('已创建并同步');
+                showToast('已创建，请记下 Gist ID 用于其他设备');
+                // 自动弹出设置让用户看到 ID
+                setTimeout(() => openSettings(), 500);
             } catch (e) {
                 setSyncUI('error', '创建失败');
                 console.error('Gist create error:', e);
@@ -713,7 +697,8 @@
             if (gistId) {
                 await pullFromGist();
             } else {
-                await createGist();
+                // 没填 Gist ID，先查找是否有已存在的
+                await findOrCreateGist();
             }
 
             // 启动轮询
@@ -722,6 +707,34 @@
                     pullFromGist();
                 }
             }, 30000);
+        }
+
+        async function findOrCreateGist() {
+            setSyncUI('syncing', '查找已有数据…');
+            try {
+                const listRes = await fetch(`https://api.github.com/gists?per_page=100&t=${Date.now()}`, {
+                    headers: { 'Authorization': `token ${syncConfig.token}` }
+                });
+                if (!listRes.ok) throw new Error(`HTTP ${listRes.status}`);
+                const gists = await listRes.json();
+                const existing = gists.find(g => g.files && g.files[GIST_FILENAME]);
+
+                if (existing) {
+                    syncConfig.gistId = existing.id;
+                    saveSyncConfig();
+                    document.getElementById('gistIdInput').value = existing.id;
+                    document.getElementById('gistHint').style.display = 'block';
+                    await pullFromGist();
+                    showToast('已找到云端数据');
+                    return;
+                }
+
+                // 确实没有，创建新的
+                await createGist();
+            } catch (e) {
+                setSyncUI('error', '查找失败');
+                console.error('Find gist error:', e);
+            }
         }
 
         function disconnectSync() {
