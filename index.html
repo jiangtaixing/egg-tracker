@@ -307,6 +307,28 @@
             font-family: inherit;
         }
 
+        .sync-bar .btn-refresh {
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 2px 6px;
+            border: 1px solid var(--tray-border);
+            border-radius: 3px;
+            transition: border-color 0.15s;
+        }
+
+        .sync-bar .btn-refresh:hover {
+            border-color: var(--text-muted);
+        }
+
+        .sync-bar .btn-refresh.spinning {
+            animation: spin 0.6s linear;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
         /* Settings modal */
         .modal-overlay {
             position: fixed;
@@ -436,6 +458,7 @@
     <div class="sync-bar" id="syncBar">
         <span class="dot" id="syncDot"></span>
         <span id="syncStatus">仅本地存储</span>
+        <button class="btn-refresh" id="btnRefresh" onclick="manualPull()" title="从云端刷新" style="display:none;">↻</button>
         <button onclick="openSettings()">设置云同步</button>
     </div>
 
@@ -644,18 +667,27 @@
             syncConfig.gistId = gistId;
             saveSyncConfig();
             closeSettings();
+            document.getElementById('btnRefresh').style.display = '';
 
             if (gistId) {
                 await pullFromGist();
             } else {
                 await createGist();
             }
+
+            // 启动轮询
+            setInterval(() => {
+                if (syncConfig.token && syncConfig.gistId) {
+                    pullFromGist();
+                }
+            }, 30000);
         }
 
         function disconnectSync() {
             syncConfig = { token: '', gistId: '' };
             saveSyncConfig();
             setSyncUI('', '仅本地存储');
+            document.getElementById('btnRefresh').style.display = 'none';
             closeSettings();
             showToast('已断开云同步');
         }
@@ -785,8 +817,22 @@
         // --- Init ---
         render();
         if (syncConfig.token && syncConfig.gistId) {
+            document.getElementById('btnRefresh').style.display = '';
             setSyncUI('syncing', '同步中…');
             pullFromGist();
+            // 每 30 秒自动拉取云端数据
+            setInterval(() => {
+                if (syncConfig.token && syncConfig.gistId) {
+                    pullFromGist();
+                }
+            }, 30000);
+        }
+
+        async function manualPull() {
+            const btn = document.getElementById('btnRefresh');
+            btn.classList.add('spinning');
+            await pullFromGist();
+            setTimeout(() => btn.classList.remove('spinning'), 600);
         }
     </script>
 </body>
