@@ -598,24 +598,20 @@
                 if (file && file.content) {
                     const remote = JSON.parse(file.content);
                     if (remote && remote.currentBox && Array.isArray(remote.currentBox.eggs)) {
-                        const remoteTime = remote.lastModified || 0;
-                        const localTime = data.lastModified || 0;
-                        if (remoteTime > localTime) {
-                            // 云端更新，覆盖本地
+                        // 比较数据是否相同
+                        const localStr = JSON.stringify(data.currentBox.eggs) + data.totalConsumed + JSON.stringify(data.history);
+                        const remoteStr = JSON.stringify(remote.currentBox.eggs) + remote.totalConsumed + JSON.stringify(remote.history);
+                        
+                        if (localStr !== remoteStr) {
+                            // 数据不同，以云端为准（云端是最后一次成功推送的结果）
                             data = remote;
                             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
                             render();
                             setSyncUI('connected', '已同步');
                             showToast('已从云端更新');
-                            return;
-                        } else if (localTime > remoteTime) {
-                            // 本地更新，推送到云端
+                        } else {
                             setSyncUI('connected', '已同步');
-                            await pushToGist();
-                            return;
                         }
-                        // 时间相同，无需操作
-                        setSyncUI('connected', '已同步');
                         return;
                     }
                 }
