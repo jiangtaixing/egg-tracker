@@ -474,6 +474,9 @@
             </p>
             <label for="gistIdInput">Gist ID（留空则自动创建）</label>
             <input type="text" id="gistIdInput" placeholder="可选，已有 Gist 则填入 ID">
+            <p class="hint" id="gistHint" style="display:none;">
+                ⬆️ 记住这个 ID，在其他设备/浏览器填入同一个 ID 即可同步。
+            </p>
             <div class="modal-actions">
                 <button class="btn" onclick="closeSettings()">取消</button>
                 <button class="btn btn-primary" onclick="saveSyncSettings()">保存并同步</button>
@@ -624,8 +627,30 @@
         }
 
         async function createGist() {
-            setSyncUI('syncing', '创建 Gist…');
+            setSyncUI('syncing', '查找已有 Gist…');
             try {
+                // 先查找是否已有同名文件的 Gist
+                const listRes = await fetch(`https://api.github.com/gists?per_page=100&t=${Date.now()}`, {
+                    headers: { 'Authorization': `token ${syncConfig.token}` }
+                });
+                if (!listRes.ok) throw new Error(`HTTP ${listRes.status}`);
+                const gists = await listRes.json();
+                const existing = gists.find(g => g.files && g.files[GIST_FILENAME]);
+
+                if (existing) {
+                    // 找到已有的，直接复用
+                    syncConfig.gistId = existing.id;
+                    saveSyncConfig();
+                    document.getElementById('gistIdInput').value = existing.id;
+                    document.getElementById('gistHint').style.display = 'block';
+                    // 拉取云端数据
+                    await pullFromGist();
+                    showToast('已找到云端数据并同步');
+                    return;
+                }
+
+                // 没有找到，新建一个
+                setSyncUI('syncing', '创建 Gist…');
                 const res = await fetch('https://api.github.com/gists', {
                     method: 'POST',
                     headers: {
@@ -647,8 +672,9 @@
                 syncConfig.gistId = gist.id;
                 saveSyncConfig();
                 document.getElementById('gistIdInput').value = gist.id;
+                document.getElementById('gistHint').style.display = 'block';
                 setSyncUI('connected', '已同步');
-                showToast('Gist 已创建并同步');
+                showToast('已创建并同步');
             } catch (e) {
                 setSyncUI('error', '创建失败');
                 console.error('Gist create error:', e);
@@ -660,6 +686,7 @@
         function openSettings() {
             document.getElementById('tokenInput').value = syncConfig.token;
             document.getElementById('gistIdInput').value = syncConfig.gistId;
+            document.getElementById('gistHint').style.display = syncConfig.gistId ? 'block' : 'none';
             document.getElementById('modalOverlay').classList.add('open');
         }
 
