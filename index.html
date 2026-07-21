@@ -587,10 +587,9 @@
             if (!syncConfig.token || !syncConfig.gistId) return;
             setSyncUI('syncing', '拉取中…');
             try {
-                const res = await fetch(`https://api.github.com/gists/${syncConfig.gistId}`, {
+                const res = await fetch(`https://api.github.com/gists/${syncConfig.gistId}?t=${Date.now()}`, {
                     headers: {
-                        'Authorization': `token ${syncConfig.token}`,
-                        'Cache-Control': 'no-cache'
+                        'Authorization': `token ${syncConfig.token}`
                     }
                 });
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
